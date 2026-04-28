@@ -1,0 +1,37 @@
+version: "3.8"
+services:
+  gateway:
+    image: harshalvk/farm-gateway:v1
+    ports:
+      - "8000:8000"
+    environment:
+      - FERTILIZER_URL=http://fertilizer:8000
+      - CROP_URL=http://crop:8000
+      - PLANT_URL=http://plant:8000
+      - SOIL_URL=http://soil:8000
+      - MONGO_URL=mongodb://mongo:27017
+    depends_on:
+      - fertilizer
+      - crop
+      - plant
+      - soil
+      - mongo
+
+  fertilizer:
+    image: harshalvk/fertilizer-model:v1
+  crop:
+    image: harshalvk/crop-model:v1
+  plant:
+    image: harshalvk/plant-diseas-model:v1
+  soil:
+    image: harshalvk/soil-health:v1
+
+  mongo:
+    image: mongo:7.0
+    volumes:
+      - mongo-data:/data/db
+    environment:
+      - MONGO_INITDB_DATABASE=farmdb
+
+volumes:
+  mongo-data:

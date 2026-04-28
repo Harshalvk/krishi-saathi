@@ -1,0 +1,31 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: fertilizer-recommendation
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: fertilizer
+  template:
+    metadata:
+      labels:
+        app: fertilizer
+    spec:
+      containers:
+        - name: fertilizer
+          image: harshalvk/fertilizer-model:v1
+          ports:
+            - containerPort: 8000
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: fertilizer-svc
+spec:
+  selector:
+    app: fertilizer
+  ports:
+    - port: 8000
+      targetPort: 8000
+  type: ClusterIP

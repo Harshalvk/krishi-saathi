@@ -1,0 +1,31 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: soil-health
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: soil-health
+  template:
+    metadata:
+      labels:
+        app: soil-health
+    spec:
+      containers:
+        - name: soil-health
+          image: harshalvk/soil-health:v1
+          ports:
+            - containerPort: 8000
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: soil-health-svc
+spec:
+  selector:
+    app: soil-health
+  ports:
+    - port: 8000
+      targetPort: 8000
+  type: ClusterIP
