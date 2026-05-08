@@ -1,10 +1,20 @@
-from fastapi import FastAPI, HTTPException, UploadFile, File
+from fastapi import FastAPI, HTTPException, UploadFile, File, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel
 from motor.motor_asyncio import AsyncIOMotorClient
 import httpx, os, asyncio
+import certifi
 from datetime import datetime
+from fastapi.middleware.cors import CORSMiddleware
 
 app = FastAPI()
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"], 
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 MODELS = {
     "fertilizer": os.getenv("FERTILIZER_URL", "http://fertilizer-svc:8000"),
@@ -13,8 +23,17 @@ MODELS = {
     "soil":        os.getenv("SOIL_URL",       "http://soil-health-svc:8000"),
 }
 
-MONGO_URL = os.getenv("MONGO_URL", "mongodb://mongo-svc:27017")
-db = AsyncIOMotorClient(MONGO_URL).farmdb
+MONGO_URL = os.getenv("MONGO_URL", "mongodb+srv://devwork2004_db_user:RjerPWCcvsthiuQq@krishi-saathi-prod-db.j35lynx.mongodb.net/")
+client = AsyncIOMotorClient(MONGO_URL, tls=True, tlsCAFile=certifi.where(), serverSelectionTimeoutMS=30000)
+db = client["krishi-saathi-prod-db"] 
+
+@app.on_event("startup")
+async def check_mongo():
+    try:
+        await client.admin.command("ping")
+        print("✅ MongoDB connected")
+    except Exception as e:
+        print("❌ MongoDB connection failed:", e)
 
 class SensorReading(BaseModel):
     device_id: str
@@ -22,12 +41,15 @@ class SensorReading(BaseModel):
 
 @app.post("/ingest")
 async def ingest(reading: SensorReading):
-    await db.readings.insert_one({
-        "device_id":   reading.device_id,
-        "timestamp":   datetime.utcnow(),
-        "sensor_data": reading.sensor_data
-    })
-    return {"status": "ok"}
+    try:
+        await db.readings.insert_one({
+            "device_id": reading.device_id,
+            "timestamp": datetime.utcnow(),
+            "sensor_data": reading.sensor_data
+        })
+        return {"status": "ok"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 async def get_latest(device_id: str):
     doc = await db.readings.find_one(
@@ -157,3 +179,49 @@ async def get_history(device_id: str, limit: int = 20):
 @app.get("/health")
 async def health():
     return {"status": "ok"}
+
+@app.post("/history/batch")
+async def get_batch_history(device_ids: list[str], limit: int = 20):
+    result = {}
+    for device_id in device_ids:
+        cursor = db.readings.find(
+            {"device_id": device_id},
+            {"_id": 0}
+        ).sort("timestamp", -1).limit(limit)
+        result[device_id] = await cursor.to_list(limit)
+    return result    
+
+@app.post("/alerts/configure")
+async def configure_alert(alert_config: dict):
+    await db.alerts.insert_one({
+        "config": alert_config,
+        "created_at": datetime.utcnow()
+    })
+    return {"status": "alert configured"}    
+
+class ConnectionManager:
+    def __init__(self):
+        self.active_connections: list[WebSocket] = []
+
+    async def connect(self, websocket: WebSocket):
+        await websocket.accept()
+        self.active_connections.append(websocket)
+
+    def disconnect(self, websocket: WebSocket):
+        self.active_connections.remove(websocket)
+
+    async def broadcast(self, message: str):
+        for connection in self.active_connections:
+            await connection.send_text(message)
+
+manager = ConnectionManager()
+
+@app.websocket("/ws/{device_id}")
+async def websocket_endpoint(websocket: WebSocket, device_id: str):
+    await manager.connect(websocket)
+    try:
+        while True:
+            data = await websocket.receive_text()
+            await manager.broadcast(f"Device {device_id}: {data}")
+    except WebSocketDisconnect:
+        manager.disconnect(websocket)    
