@@ -14,7 +14,7 @@ The Gateway service is the single entry point for all Krishi Saathi ML predictio
 ## Base URL
 
 ```
-http://a2f6ac2d332054d31ae532ff200cb4c8-584187728.ap-south-1.elb.amazonaws.com
+http://ab3ce8cebdd024a89adaf16ffe86a647-246539694.ap-south-1.elb.amazonaws.com
 ```
 
 ---
