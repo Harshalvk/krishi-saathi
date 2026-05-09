@@ -16,12 +16,10 @@ export default function Sidebar({ activeTab, setActiveTab }: SidebarProps) {
   ];
 
   return (
-    <div className="w-64 bg-primary-dark text-white flex flex-col">
-      <div className="p-6 border-b border-primary-medium">
-        <h1 className="text-xl font-bold">Smart Kisan Mitra</h1>
-        <p className="text-sm text-primary-soft mt-1">
-          AI powered IoT Solution for Sustainable Farming
-        </p>
+    <div className="w-64 bg-white border-r border-gray-200 flex flex-col">
+      <div className="p-5 border-b border-gray-200">
+        <h1 className="text-xl font-bold text-green-700">🌾 Smart Kisan</h1>
+        <p className="text-xs text-gray-500 mt-1">AI Powered IoT Solution</p>
       </div>
 
       <nav className="flex-1 p-4">
@@ -32,21 +30,21 @@ export default function Sidebar({ activeTab, setActiveTab }: SidebarProps) {
             onClick={() => setActiveTab(item.id)}
             className={`w-full text-left px-4 py-3 rounded-lg mb-2 transition-colors duration-200 flex items-center gap-3 ${
               activeTab === item.id
-                ? "bg-primary-medium text-white"
-                : "text-primary-soft hover:bg-primary-medium hover:text-white"
+                ? "bg-green-50 text-green-700 border-r-4 border-green-600"
+                : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
             }`}
           >
-            <span>{item.icon}</span>
-            <span>{item.name}</span>
+            <span className="text-xl">{item.icon}</span>
+            <span className="font-medium">{item.name}</span>
           </motion.button>
         ))}
       </nav>
 
-      <div className="p-6 border-t border-primary-medium">
-        <div className="text-xs text-primary-soft">
+      <div className="p-6 border-t border-gray-200">
+        <div className="text-xs text-gray-500">
           <p>API Gateway Status</p>
           <div className="flex items-center gap-2 mt-1">
-            <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
+            <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
             <span>Connected</span>
           </div>
         </div>
