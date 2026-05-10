@@ -42,12 +42,24 @@ class SensorReading(BaseModel):
 @app.post("/ingest")
 async def ingest(reading: SensorReading):
     try:
-        await db.readings.insert_one({
-            "device_id": reading.device_id,
-            "timestamp": datetime.utcnow(),
-            "sensor_data": reading.sensor_data
-        })
-        return {"status": "ok"}
+        result = await db.readings.update_one(
+            {"device_id": reading.device_id},  
+            {
+                "$set": {  
+                    "timestamp": datetime.utcnow(),
+                    "sensor_data": reading.sensor_data
+                }
+            },
+            upsert=True 
+        )
+        
+        if result.upserted_id:
+            print(f"✅ New device created: {reading.device_id}")
+        else:
+            print(f"🔄 Device updated: {reading.device_id}")
+            
+        return {"status": "ok", "device_id": reading.device_id}
+        
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
