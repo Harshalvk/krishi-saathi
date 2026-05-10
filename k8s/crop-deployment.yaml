@@ -14,7 +14,7 @@ spec:
     spec:
       containers:
         - name: crop
-          image: harshalvk/crop-model:v1
+          image: harshalvk/crop-model:v2
           ports:
             - containerPort: 8000
 ---

@@ -23,14 +23,9 @@ spec:
             - name: CROP_URL
               value: "http://crop-svc:8000"
             - name: PLANT_URL
-              value: "http://plant-diseas-svc:8000"
+              value: "http://plant-disease-svc:8000"
             - name: SOIL_URL
               value: "http://soil-health-svc:8000"
-            - name: MONGO_URL # ← replace the old hardcoded value
-              valueFrom:
-                secretKeyRef:
-                  name: mongo-secret
-                  key: MONGO_URI
 ---
 apiVersion: v1
 kind: Service

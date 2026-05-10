@@ -14,7 +14,7 @@ spec:
     spec:
       containers:
         - name: fertilizer
-          image: harshalvk/fertilizer-model:v1
+          image: harshalvk/fertilizer-model:v2
           ports:
             - containerPort: 8000
 ---
