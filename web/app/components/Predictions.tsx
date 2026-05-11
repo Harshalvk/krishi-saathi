@@ -10,9 +10,7 @@ import {
   TreeDeciduous,
 } from "lucide-react";
 
-const GATEWAY =
-  process.env.NEXT_PUBLIC_API_GATEWAY ||
-  "http://ab3ce8cebdd024a89adaf16ffe86a647-246539694.ap-south-1.elb.amazonaws.com";
+const GATEWAY = process.env.NEXT_PUBLIC_API_GATEWAY || "http://localhost:8000";
 
 interface PredictionsTabProps {
   deviceId: string;
