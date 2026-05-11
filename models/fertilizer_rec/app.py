@@ -29,13 +29,13 @@ crop_map = {
 }
 
 class Sensors(BaseModel):
-    N: int
-    P: int
-    K: int
+    N: float
+    P: float
+    K: float
     pH: float
     EC: float
-    soil_temp_C: int
-    soil_moisture: int
+    soil_temp_C: float
+    soil_moisture: float
     crop: str
     growth_stage: str
 

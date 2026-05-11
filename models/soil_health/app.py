@@ -13,9 +13,9 @@ model = joblib.load(os.path.join(ARTIFACTS_DIR, "model.pkl"))
 scaler = joblib.load(os.path.join(ARTIFACTS_DIR, "scaler.pkl"))
 
 class Items(BaseModel):
-    N: int
-    P: int
-    K: int
+    N: float
+    P: float
+    K: float
     ph: float
     moisture: float
     temperature: float
