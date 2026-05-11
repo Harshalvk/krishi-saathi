@@ -1,10 +1,10 @@
-from fastapi import FastAPI, HTTPException, UploadFile, File, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, HTTPException, UploadFile, File, WebSocket, WebSocketDisconnect, BackgroundTasks
 from pydantic import BaseModel
 from motor.motor_asyncio import AsyncIOMotorClient
-import httpx, os, asyncio
-import certifi
+import httpx, os, asyncio, certifi, json
 from datetime import datetime
 from fastapi.middleware.cors import CORSMiddleware
+from typing import Optional
 
 app = FastAPI()
 
@@ -38,26 +38,40 @@ async def check_mongo():
 class SensorReading(BaseModel):
     device_id: str
     sensor_data: dict
+    timestamp: Optional[str] = None
+    latitude: float        
+    longitude: float      
 
+
+# Modify your ingest endpoint to broadcast updates
 @app.post("/ingest")
-async def ingest(reading: SensorReading):
+async def ingest(reading: SensorReading, background_tasks: BackgroundTasks):
     try:
         result = await db.readings.update_one(
-            {"device_id": reading.device_id},  
+            {"device_id": reading.device_id},
             {
-                "$set": {  
+                "$set": {
                     "timestamp": datetime.utcnow(),
-                    "sensor_data": reading.sensor_data
+                    "sensor_data": reading.sensor_data,
+                    "latitude": reading.latitude,   
+                    "longitude": reading.longitude
                 }
             },
-            upsert=True 
+            upsert=True
         )
         
-        if result.upserted_id:
-            print(f"✅ New device created: {reading.device_id}")
-        else:
-            print(f"🔄 Device updated: {reading.device_id}")
-            
+        # Broadcast to WebSocket clients
+        background_tasks.add_task(
+            manager.broadcast, 
+            json.dumps({
+                "device_id": reading.device_id,
+                "sensor_data": reading.sensor_data,
+                "timestamp": datetime.utcnow().isoformat(),
+                "latitude": reading.latitude,   
+                "longitude": reading.longitude
+            })
+        )
+        
         return {"status": "ok", "device_id": reading.device_id}
         
     except Exception as e:
@@ -82,15 +96,15 @@ async def predict_fertilizer(body: FertilizerExtras):
     sensors = await get_latest(body.device_id)
     payload = {
         "sensors": {
-            "N":            sensors["N"],
-            "P":            sensors["P"],
-            "K":            sensors["K"],
-            "pH":           sensors["ph"],
-            "EC":           sensors["ec"],
-            "soil_temp_C":  sensors["soil_temp_C"],
-            "soil_moisture":sensors["soil_moisture"],
-            "crop":         body.crop,
-            "growth_stage": body.growth_stage
+            "N":             sensors["N"],
+            "P":             sensors["P"],
+            "K":             sensors["K"],
+            "pH":            sensors["ph"],          
+            "EC":            sensors["ec"],         
+            "soil_temp_C":   sensors["soil_temp_C"],
+            "soil_moisture": sensors["soil_moisture"],
+            "crop":          body.crop,
+            "growth_stage":  body.growth_stage,
         }
     }
     async with httpx.AsyncClient() as client:
@@ -226,6 +240,29 @@ class ConnectionManager:
         for connection in self.active_connections:
             await connection.send_text(message)
 
+@app.get("/devices")
+async def get_devices():
+    """Get all unique device IDs from the database"""
+    try:
+        devices = await db.readings.distinct("device_id")
+        
+        device_list = []
+        for device_id in devices:
+            last_reading = await db.readings.find_one(
+                {"device_id": device_id},
+                sort=[("timestamp", -1)]
+            )
+            
+            device_list.append({
+                "device_id": device_id,
+                "last_updated": last_reading["timestamp"] if last_reading else None,
+                "status": "active" if last_reading and last_reading["timestamp"] else "inactive"
+            })
+        
+        return {"devices": device_list}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 manager = ConnectionManager()
 
 @app.websocket("/ws/{device_id}")
@@ -237,3 +274,82 @@ async def websocket_endpoint(websocket: WebSocket, device_id: str):
             await manager.broadcast(f"Device {device_id}: {data}")
     except WebSocketDisconnect:
         manager.disconnect(websocket)    
+
+
+class BoundaryPoint(BaseModel):
+    lat: float
+    lng: float
+
+class FarmBoundary(BaseModel):
+    id: str
+    device_id: str
+    name: str
+    color: str
+    points: list[dict]
+    area: float
+
+from pydantic import BaseModel
+from typing import List
+
+class BoundaryPoint(BaseModel):
+    lat: float
+    lng: float
+
+class FarmBoundary(BaseModel):
+    id: str
+    device_id: str
+    name: str
+    color: str
+    points: List[BoundaryPoint]
+    area: float
+
+@app.post("/boundaries")
+async def save_boundary(b: FarmBoundary):
+    doc = b.dict()
+    doc["created_at"] = datetime.utcnow()
+    await db.boundaries.update_one(
+        {"id": b.id},
+        {"$set": doc},
+        upsert=True
+    )
+    return {"status": "saved", "id": b.id}
+
+@app.get("/boundaries/{device_id}")
+async def get_boundaries(device_id: str):
+    cursor = db.boundaries.find(
+        {"device_id": device_id},
+        {"_id": 0}           # exclude MongoDB _id from response
+    )
+    docs = await cursor.to_list(100)
+    return {"boundaries": docs}
+
+@app.patch("/boundaries/{boundary_id}")
+async def rename_boundary(boundary_id: str, body: dict):
+    name = body.get("name", "").strip()
+    if not name:
+        raise HTTPException(400, "Name cannot be empty")
+    result = await db.boundaries.update_one(
+        {"$or": [{"id": boundary_id}, {"name": boundary_id}]},
+        {"$set": {"name": name, "id": boundary_id}}
+    )
+    if result.matched_count == 0:
+        raise HTTPException(404, f"Boundary {boundary_id} not found")
+    return {"status": "renamed"}
+
+@app.delete("/boundaries/{device_id}/{boundary_id}")
+async def delete_boundary(device_id: str, boundary_id: str):
+    result = await db.boundaries.delete_one({
+        "device_id": device_id,
+        "$or": [{"id": boundary_id}, {"name": boundary_id}]
+    })
+    if result.deleted_count == 0:
+        raise HTTPException(404, "Boundary not found")
+    return {"status": "deleted"}
+
+@app.get("/boundaries/debug/{device_id}")
+async def debug_boundaries(device_id: str):
+    cursor = db.boundaries.find({"device_id": device_id})
+    docs = await cursor.to_list(100)
+    for doc in docs:
+        doc["_id"] = str(doc["_id"])
+    return {"count": len(docs), "docs": docs}
