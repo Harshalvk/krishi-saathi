@@ -14,7 +14,7 @@ spec:
     spec:
       containers:
         - name: soil-health
-          image: harshalvk/soil-health:v2
+          image: harshalvk/soil-health:v3
           ports:
             - containerPort: 8000
 ---
